@@ -1,4 +1,3 @@
-# from evadb.configuration.configuration_manager import ConfigurationManager
 import streamlit as st 
 
 import os
@@ -6,7 +5,6 @@ import shutil
 import time
 
 import pandas as pd
-from evadb.configuration.configuration_manager import ConfigurationManager
 
 import evadb
 
@@ -31,7 +29,6 @@ DEFAULT_VIDEO_LINK = "https://www.youtube.com/watch?v=TvS1lHEQoKk"
 
 
 
-os.environ['OPENAI_API_KEY'] = ConfigurationManager().get_value("third_party", "OPENAI_KEY")
 
 
 def try_to_import_pytube():
@@ -193,83 +190,86 @@ if __name__ == "__main__":
     st.title('Enter Youtube Video Link Here')
     video_link = st.text_input('Plug in your video link here ') 
 
+    if video_link:
+        st.title('Enter Your API key')
+        api_key = st.text_input('Plug in your API key here ') 
 
-    # Display if there's a prompt
-    if video_link: 
-        # title = title_chain.run(prompt)
-        # wiki_research = wiki.run(prompt) 
-        # script = script_chain.run(title=title, wikipedia_research=wiki_research)
+        if api_key:
+            os.environ['OPENAI_KEY'] = api_key
+            # title = title_chain.run(prompt)
+            # wiki_research = wiki.run(prompt) 
+            # script = script_chain.run(title=title, wikipedia_research=wiki_research)
 
-        # st.write(title) 
-        # st.write(script) 
+            # st.write(title) 
+            # st.write(script) 
 
-        transcript = None
-        try:
-            transcript = download_youtube_video_transcript(video_link)
-            print(transcript)
-        except Exception as e:
-            print(e)
-            print(
-                "Failed to download video transcript. Downloading video and generate transcript from video instead..."
-            )
-
-        try:
-            # establish evadb api cursor
-            cursor = evadb.connect().cursor()
-            if transcript is not None:
-                grouped_transcript = group_transcript(transcript)
-                df = pd.DataFrame(grouped_transcript)
-                df.to_csv("transcript.csv")
-            else:
-                # download youtube video online if the video disabled transcript
-                download_youtube_video_from_link(video_link)
-
-                # generate video transcript
-                raw_transcript_string = generate_online_video_transcript(cursor)
-                partitioned_transcript = partition_transcript(raw_transcript_string)
-                df = pd.DataFrame(partitioned_transcript)
-                df.to_csv("transcript.csv")
-
-            # load chunked transcript into table
-            cursor.query("""DROP TABLE IF EXISTS Transcript;""").execute()
-            cursor.query(
-                """CREATE TABLE IF NOT EXISTS Transcript (text TEXT(50));"""
-            ).execute()
-            cursor.load("transcript.csv", "Transcript", "csv").execute()
-            print("===========================================")
-            print("Ask anything about the video!")
-            ready = True
-            # while ready:
-                # question = str(input("Question (enter 'exit' to exit): "))
-            st.title('Ask Anything About the Video')
-            question = st.text_input("Question (enter 'exit' to exit):") 
-            if question.lower() == "exit":
-                ready = False
-            else:
-                # Generate response with chatgpt udf
-                print("Generating response...")
-                generate_chatgpt_response_rel = cursor.table("Transcript").select(
-                    f"ChatGPT('{question} in 50 words', text)"
+            transcript = None
+            try:
+                transcript = download_youtube_video_transcript(video_link)
+                print(transcript)
+            except Exception as e:
+                print(e)
+                print(
+                    "Failed to download video transcript. Downloading video and generate transcript from video instead..."
                 )
-                start = time.time()
-                responses = generate_chatgpt_response_rel.df()["chatgpt.response"]
 
-                response = ""
-                for r in responses:
-                    response += f"{r} \n"
-                print(f"Answer (generated in {time.time() - start} seconds):")
-                print(response, "\n")
-                st.write("Answer ::") 
-                st.write("{}\n".format(response)) 
-            question = st.empty()
+            try:
+                # establish evadb api cursor
+                cursor = evadb.connect().cursor()
+                if transcript is not None:
+                    grouped_transcript = group_transcript(transcript)
+                    df = pd.DataFrame(grouped_transcript)
+                    df.to_csv("transcript.csv")
+                else:
+                    # download youtube video online if the video disabled transcript
+                    download_youtube_video_from_link(video_link)
 
-            cleanup()
-            print("Session ended.")
-            print("===========================================")
-        except Exception as e:
-            cleanup()
-            print("Session ended with an error.")
-            print(e)
-            print("===========================================")
+                    # generate video transcript
+                    raw_transcript_string = generate_online_video_transcript(cursor)
+                    partitioned_transcript = partition_transcript(raw_transcript_string)
+                    df = pd.DataFrame(partitioned_transcript)
+                    df.to_csv("transcript.csv")
+
+                # load chunked transcript into table
+                cursor.query("""DROP TABLE IF EXISTS Transcript;""").execute()
+                cursor.query(
+                    """CREATE TABLE IF NOT EXISTS Transcript (text TEXT(50));"""
+                ).execute()
+                cursor.load("transcript.csv", "Transcript", "csv").execute()
+                print("===========================================")
+                print("Ask anything about the video!")
+                ready = True
+                # while ready:
+                    # question = str(input("Question (enter 'exit' to exit): "))
+                st.title('Ask Anything About the Video')
+                question = st.text_input("Question (enter 'exit' to exit):") 
+                if question.lower() == "exit":
+                    ready = False
+                else:
+                    # Generate response with chatgpt udf
+                    print("Generating response...")
+                    generate_chatgpt_response_rel = cursor.table("Transcript").select(
+                        f"ChatGPT('{question} in 50 words', text)"
+                    )
+                    start = time.time()
+                    responses = generate_chatgpt_response_rel.df()["chatgpt.response"]
+
+                    response = ""
+                    for r in responses:
+                        response += f"{r} \n"
+                    print(f"Answer (generated in {time.time() - start} seconds):")
+                    print(response, "\n")
+                    st.write("Answer ::") 
+                    st.write("{}\n".format(response)) 
+                question = st.empty()
+
+                cleanup()
+                print("Session ended.")
+                print("===========================================")
+            except Exception as e:
+                cleanup()
+                print("Session ended with an error.")
+                print(e)
+                print("===========================================")
             
 
